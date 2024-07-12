@@ -1,0 +1,2 @@
+https://langchain-ai.github.io/langgraph/how-tos/branching/
+ - for parallel node execution in LangGraph
