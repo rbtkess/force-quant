@@ -86,7 +86,12 @@ function App() {
       });
 
       const data = await response.json();
-      setProgressMessages([]);
+      
+      // Only clear progress messages if we have valid data
+      if (data.in_spx) {
+        setProgressMessages([]);
+      }
+      
       setOutput(data);
       console.log(data);
     } catch (error) {
@@ -97,8 +102,8 @@ function App() {
     }
   };
 
-  // Parse the summary JSON string if output is available
-  const summary = output ? JSON.parse(output.summary).forces : [];
+  // Parse the summary JSON string if output is available and has summary
+  const summary = output && output.summary ? JSON.parse(output.summary).forces : [];
 
   // Function to convert newlines to <br/> tags
   const convertNewlinesToBreaks = (text) => {
@@ -106,7 +111,7 @@ function App() {
   };
 
   // Define radar chart data
-  const radarChartData = summary.length > 0
+  const radarChartData = summary && summary.length > 0
     ? {
         labels: summary.map((force) => force.force),
         datasets: [
@@ -123,7 +128,10 @@ function App() {
           },
         ],
       }
-    : {};
+    : {
+        labels: [],
+        datasets: [],
+      };
 
   // Define radar chart options
   const radarChartOptions = {
@@ -169,49 +177,36 @@ function App() {
     },
   };
 
-  // // Line Chart data
-  // const lineChartData = {
-  //   labels: Array.from({ length: 6 * 365 }, (_, i) => `Day ${i + 1}`), // Placeholder days
-  //   datasets: [
-  //     {
-  //       label: 'History',
-  //       data: Array.from({ length: 5 * 365 }, () => Math.random() * 100 + 150), // Random data
-  //       fill: false,
-  //       borderColor: 'rgb(75, 192, 192)',
-  //       tension: 0.1,
-  //     },
-  //     {
-  //       label: 'Forecast',
-  //       data: Array.from({ length: 365 }, () => Math.random() * 50 + 100), // Random forecast data
-  //       fill: false,
-  //       borderColor: 'rgb(255, 205, 86)',
-  //       tension: 0.1,
-  //     },
-  //   ],
-  // };
-  const lineChartData = output ? {
-    labels: output.stock_prices.labels,
-    datasets: output.stock_prices.datasets.map((dataset, index) => ({
-      ...dataset,
-      pointRadius: 0, // Remove the dots
-      backgroundColor: index === 0 ? 'rgba(34, 139, 34, 0.2)' : 'rgba(0, 0, 255, 0.2)',
-      borderColor: index === 0 ? 'rgba(34, 139, 34, 1)' : 'rgba(0, 0, 255, 1)', // Green for history, blue for forecast
-    })),
-  } : {
-    labels: [],
-    datasets: [],
-  };
+  // Line Chart data with additional null checks
+  const lineChartData = (output && 
+                        output.stock_prices && 
+                        output.stock_prices.labels && 
+                        output.stock_prices.datasets && 
+                        Array.isArray(output.stock_prices.datasets)) 
+    ? {
+        labels: output.stock_prices.labels,
+        datasets: output.stock_prices.datasets.map((dataset, index) => ({
+          ...dataset,
+          pointRadius: 0,
+          backgroundColor: index === 0 ? 'rgba(34, 139, 34, 0.2)' : 'rgba(0, 0, 255, 0.2)',
+          borderColor: index === 0 ? 'rgba(34, 139, 34, 1)' : 'rgba(0, 0, 255, 1)',
+        })),
+      }
+    : {
+        labels: [],
+        datasets: [],
+      };
 
   // Define line chart options
   const lineChartOptions = {
-    maintainAspectRatio: false, // Allows dynamic sizing
+    maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'bottom', // Place legend at the bottom
+        position: 'bottom',
       },
       title: {
         display: true,
-        text: 'Stock Price', // Title for the line chart
+        text: 'Stock Price',
         font: {
           size: 16,
         },
@@ -290,7 +285,7 @@ function App() {
                 <ListItem key={index}>
                   <Typography
                     variant="body2"
-                    style={{ fontSize: '0.875rem', lineHeight: '1.2' }} // Adjusted line height
+                    style={{ fontSize: '0.875rem', lineHeight: '1.2' }}
                   >
                     {msg}
                   </Typography>
@@ -300,7 +295,7 @@ function App() {
           </Box>
         )}
 
-        {output && (
+        {output && output.company_name && (
           <>
             {/* Company Title */}
             <Typography
@@ -311,57 +306,63 @@ function App() {
               {output.company_name}
             </Typography>
 
-            {/* Charts */}
-            <Box display="flex" justifyContent="space-between" mt={3}>
-              {/* Radar Chart */}
-              <Box width="55%" height="400px">
-                <Radar data={radarChartData} options={radarChartOptions}/>
-              </Box>
+            {/* Charts - Only show if we have valid data */}
+            {summary && summary.length > 0 && (
+              <Box display="flex" justifyContent="space-between" mt={3}>
+                {/* Radar Chart */}
+                <Box width="55%" height="400px">
+                  <Radar data={radarChartData} options={radarChartOptions}/>
+                </Box>
 
-              {/* Line Chart */}
-              <Box width="48%" height="400px">
-                <Line data={lineChartData} options={lineChartOptions}/>
+                {/* Line Chart */}
+                <Box width="48%" height="400px">
+                  <Line data={lineChartData} options={lineChartOptions}/>
+                </Box>
               </Box>
-            </Box>
+            )}
 
-            {/* Tabbed Interface for Force Details */}
-            <Box mt={3}>
-              <Tabs value={tabValue} onChange={handleTabChange} centered>
+            {/* Tabbed Interface for Force Details - Only show if we have valid summary data */}
+            {summary && summary.length > 0 && (
+              <Box mt={3}>
+                <Tabs value={tabValue} onChange={handleTabChange} centered>
+                  {summary.map((force, index) => (
+                    <Tab key={index} label={force.force} />
+                  ))}
+                </Tabs>
+
                 {summary.map((force, index) => (
-                  <Tab key={index} label={force.force} />
+                  <div
+                    key={index}
+                    role="tabpanel"
+                    hidden={tabValue !== index}
+                    style={{ padding: '1rem' }}
+                  >
+                    {tabValue === index && (
+                      <>
+                        <Typography variant="h6">Summary</Typography>
+                        <Typography
+                          variant="body2"
+                          style={{ marginBottom: '1rem' }}
+                        >
+                          {force.justification}
+                        </Typography>
+                        <Typography variant="h6">Detail</Typography>
+                        {output.force_context && output.force_context[force.force] && (
+                          <Typography
+                            variant="body2"
+                            dangerouslySetInnerHTML={{
+                              __html: convertNewlinesToBreaks(
+                                output.force_context[force.force]
+                              ),
+                            }}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
                 ))}
-              </Tabs>
-
-              {summary.map((force, index) => (
-                <div
-                  key={index}
-                  role="tabpanel"
-                  hidden={tabValue !== index}
-                  style={{ padding: '1rem' }}
-                >
-                  {tabValue === index && (
-                    <>
-                      <Typography variant="h6">Summary</Typography>
-                      <Typography
-                        variant="body2"
-                        style={{ marginBottom: '1rem' }}
-                      >
-                        {force.justification}
-                      </Typography>
-                      <Typography variant="h6">Detail</Typography>
-                      <Typography
-                        variant="body2"
-                        dangerouslySetInnerHTML={{
-                          __html: convertNewlinesToBreaks(
-                            output.force_context[force.force]
-                          ),
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
-              ))}
-            </Box>
+              </Box>
+            )}
           </>
         )}
       </Paper>
